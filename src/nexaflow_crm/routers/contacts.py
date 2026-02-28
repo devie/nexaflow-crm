@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from nexaflow_crm.auth import get_current_user
@@ -12,13 +12,16 @@ router = APIRouter(prefix="/api/contacts", tags=["Contacts"])
 @router.get("", response_model=list[ContactOut])
 def list_contacts(
     search: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     q = db.query(Contact).filter(Contact.user_id == user.id)
     if search:
-        q = q.filter(Contact.name.ilike(f"%{search}%"))
-    return q.order_by(Contact.created_at.desc()).all()
+        safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(Contact.name.ilike(f"%{safe_search}%"))
+    return q.order_by(Contact.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
 
 @router.post("", response_model=ContactOut, status_code=201)

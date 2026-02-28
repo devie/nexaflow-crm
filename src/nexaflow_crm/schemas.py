@@ -1,12 +1,15 @@
 from datetime import datetime
+from enum import Enum
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 
 # Auth
 class UserCreate(BaseModel):
-    email: str = Field(..., min_length=3)
-    name: str = Field(..., min_length=1)
-    password: str = Field(..., min_length=6)
+    email: EmailStr
+    name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=6, max_length=128)
 
 
 class UserOut(BaseModel):
@@ -56,19 +59,19 @@ class ContactOut(BaseModel):
 
 # Projects
 class ProjectCreate(BaseModel):
-    title: str = Field(..., min_length=1)
-    description: str = ""
+    title: str = Field(..., min_length=1, max_length=300)
+    description: str = Field(default="", max_length=5000)
     contact_id: int | None = None
-    status: str = "active"
-    value: float = 0.0
+    status: Literal["active", "completed", "on_hold", "cancelled"] = "active"
+    value: float = Field(default=0.0, ge=0)
 
 
 class ProjectUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=5000)
     contact_id: int | None = None
-    status: str | None = None
-    value: float | None = None
+    status: Literal["active", "completed", "on_hold", "cancelled"] | None = None
+    value: float | None = Field(default=None, ge=0)
 
 
 class ProjectOut(BaseModel):
@@ -86,13 +89,13 @@ class ProjectOut(BaseModel):
 class InvoiceCreate(BaseModel):
     project_id: int
     amount: float = Field(..., gt=0)
-    status: str = "unpaid"
+    status: Literal["unpaid", "paid", "overdue", "cancelled"] = "unpaid"
     due_date: str = ""
 
 
 class InvoiceUpdate(BaseModel):
     amount: float | None = Field(default=None, gt=0)
-    status: str | None = None
+    status: Literal["unpaid", "paid", "overdue", "cancelled"] | None = None
     due_date: str | None = None
 
 

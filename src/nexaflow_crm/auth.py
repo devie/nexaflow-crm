@@ -10,9 +10,15 @@ from sqlalchemy.orm import Session
 from nexaflow_crm.database import get_db
 from nexaflow_crm.models import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "nexaflow-dev-secret-change-in-production")
+import secrets as _secrets
+
+_default_secret = _secrets.token_hex(32)
+SECRET_KEY = os.getenv("SECRET_KEY", _default_secret)
+if SECRET_KEY == _default_secret:
+    import warnings
+    warnings.warn("SECRET_KEY not set — using auto-generated key. Tokens will invalidate on restart.", stacklevel=2)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
+ACCESS_TOKEN_EXPIRE_HOURS = 1
 
 security = HTTPBearer()
 

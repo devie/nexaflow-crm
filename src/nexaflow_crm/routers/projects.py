@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from nexaflow_crm.auth import get_current_user
@@ -12,13 +12,15 @@ router = APIRouter(prefix="/api/projects", tags=["Projects"])
 @router.get("", response_model=list[ProjectOut])
 def list_projects(
     status: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     q = db.query(Project).filter(Project.user_id == user.id)
     if status:
         q = q.filter(Project.status == status)
-    return q.order_by(Project.created_at.desc()).all()
+    return q.order_by(Project.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
