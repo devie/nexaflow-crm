@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexaFlow CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-gray-50 text-gray-900">
+    <div id="app"></div>
+    <script>
+    const API = '';
+    let token = localStorage.getItem('nf_token');
+    let currentTab = 'dashboard';
+
+    // API helper
+    async function api(path, opts = {}) {
+        const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(API + path, { ...opts, headers });
+        if (res.status === 401) { token = null; localStorage.removeItem('nf_token'); render(); return null; }
+        if (res.status === 204) return null;
+        return res.json();
+    }
+
+    // Render
+    function render() {
+        const app = document.getElementById('app');
+        if (!token) { app.innerHTML = authPage(); setupAuth(); }
+        else { app.innerHTML = mainLayout(); setupMain(); loadTab(currentTab); }
+    }
+
+    // Auth page
+    function authPage() {
+        return `
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+            <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+                <h1 class="text-2xl font-bold text-center mb-1">NexaFlow CRM</h1>
+                <p class="text-gray-500 text-center mb-6 text-sm">Manage your clients, projects & invoices</p>
+                <div id="authForm">
+                    <div id="authError" class="hidden bg-red-100 text-red-700 p-2 rounded mb-3 text-sm"></div>
+                    <input id="authName" type="text" placeholder="Name" class="w-full border rounded-lg px-4 py-2 mb-3 hidden" />
+                    <input id="authEmail" type="email" placeholder="Email" class="w-full border rounded-lg px-4 py-2 mb-3" />
+                    <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-4 py-2 mb-4" />
+                    <button id="authBtn" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-500 font-medium">Login</button>
+                    <p class="text-center mt-4 text-sm text-gray-500">
+                        <span id="authToggleText">Don't have an account?</span>
+                        <button id="authToggle" class="text-indigo-600 font-medium ml-1">Register</button>
+                    </p>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function setupAuth() {
+        let isLogin = true;
+        const toggle = () => {
+            isLogin = !isLogin;
+            document.getElementById('authBtn').textContent = isLogin ? 'Login' : 'Register';
+            document.getElementById('authToggle').textContent = isLogin ? 'Register' : 'Login';
+            document.getElementById('authToggleText').textContent = isLogin ? "Don't have an account?" : "Already have an account?";
+            document.getElementById('authName').classList.toggle('hidden', isLogin);
+        };
+        document.getElementById('authToggle').onclick = toggle;
+        document.getElementById('authBtn').onclick = async () => {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPass').value;
+            const errEl = document.getElementById('authError');
+            errEl.classList.add('hidden');
+            const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+            const body = isLogin ? { email, password } : { email, password, name: document.getElementById('authName').value };
+            try {
+                const data = await api(endpoint, { method: 'POST', body: JSON.stringify(body) });
+                if (data && data.access_token) {
+                    token = data.access_token;
+                    localStorage.setItem('nf_token', token);
+                    render();
+                } else {
+                    errEl.textContent = data?.detail || 'Auth failed';
+                    errEl.classList.remove('hidden');
+                }
+            } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+        };
+    }
+
+    // Main layout
+    function mainLayout() {
+        return `
+        <div class="min-h-screen flex flex-col">
+            <nav class="bg-white border-b px-6 py-3 flex items-center justify-between">
+                <h1 class="text-xl font-bold text-indigo-600">NexaFlow</h1>
+                <div class="flex items-center gap-1">
+                    <button data-tab="dashboard" class="tab-btn px-3 py-1.5 rounded text-sm font-medium">Dashboard</button>
+                    <button data-tab="contacts" class="tab-btn px-3 py-1.5 rounded text-sm font-medium">Contacts</button>
+                    <button data-tab="projects" class="tab-btn px-3 py-1.5 rounded text-sm font-medium">Projects</button>
+                    <button data-tab="invoices" class="tab-btn px-3 py-1.5 rounded text-sm font-medium">Invoices</button>
+                </div>
+                <button id="logoutBtn" class="text-sm text-gray-500 hover:text-red-600">Logout</button>
+            </nav>
+            <main id="content" class="flex-1 p-6 max-w-6xl mx-auto w-full"></main>
+        </div>`;
+    }
+
+    function setupMain() {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.onclick = () => { currentTab = btn.dataset.tab; loadTab(currentTab); };
+        });
+        document.getElementById('logoutBtn').onclick = () => { token = null; localStorage.removeItem('nf_token'); render(); };
+    }
+
+    function setActiveTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('bg-indigo-100', btn.dataset.tab === tab);
+            btn.classList.toggle('text-indigo-700', btn.dataset.tab === tab);
+        });
+    }
+
+    async function loadTab(tab) {
+        setActiveTab(tab);
+        const content = document.getElementById('content');
+        if (tab === 'dashboard') await renderDashboard(content);
+        else if (tab === 'contacts') await renderContacts(content);
+        else if (tab === 'projects') await renderProjects(content);
+        else if (tab === 'invoices') await renderInvoices(content);
+    }
+
+    // Dashboard
+    async function renderDashboard(el) {
+        const stats = await api('/api/dashboard');
+        if (!stats) return;
+        el.innerHTML = `
+            <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                ${card('Total Contacts', stats.total_contacts, 'bg-blue-500')}
+                ${card('Active Projects', stats.active_projects, 'bg-green-500')}
+                ${card('Completed', stats.completed_projects, 'bg-purple-500')}
+                ${card('Project Value', '$' + stats.total_project_value.toLocaleString(), 'bg-indigo-500')}
+                ${card('Unpaid Invoices', '$' + stats.unpaid_total.toLocaleString(), 'bg-red-500')}
+                ${card('Paid Invoices', '$' + stats.paid_total.toLocaleString(), 'bg-emerald-500')}
+            </div>`;
+    }
+
+    function card(title, value, color) {
+        return `<div class="bg-white rounded-xl shadow p-5">
+            <div class="text-sm text-gray-500 mb-1">${title}</div>
+            <div class="text-2xl font-bold">${value}</div>
+            <div class="${color} h-1 rounded mt-3"></div>
+        </div>`;
+    }
+
+    // Contacts
+    async function renderContacts(el) {
+        const contacts = await api('/api/contacts') || [];
+        el.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Contacts</h2>
+                <button id="addContact" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-500">+ Add Contact</button>
+            </div>
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50"><tr>
+                        <th class="text-left p-3">Name</th><th class="text-left p-3">Email</th>
+                        <th class="text-left p-3">Company</th><th class="text-left p-3">Tags</th><th class="p-3">Actions</th>
+                    </tr></thead>
+                    <tbody>${contacts.map(c => `<tr class="border-t">
+                        <td class="p-3 font-medium">${esc(c.name)}</td><td class="p-3">${esc(c.email)}</td>
+                        <td class="p-3">${esc(c.company)}</td>
+                        <td class="p-3">${c.tags ? c.tags.split(',').map(t => `<span class="bg-gray-100 px-2 py-0.5 rounded text-xs">${esc(t.trim())}</span>`).join(' ') : ''}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="deleteContact(${c.id})" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+                        </td>
+                    </tr>`).join('')}</tbody>
+                </table>
+                ${contacts.length === 0 ? '<p class="p-6 text-center text-gray-400">No contacts yet</p>' : ''}
+            </div>`;
+        document.getElementById('addContact').onclick = () => showContactForm(el);
+    }
+
+    function showContactForm(el) {
+        const form = document.createElement('div');
+        form.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        form.innerHTML = `<div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold mb-4">New Contact</h3>
+            <input id="cName" placeholder="Name *" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="cEmail" placeholder="Email" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="cPhone" placeholder="Phone" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="cCompany" placeholder="Company" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="cTags" placeholder="Tags (comma-separated)" class="w-full border rounded px-3 py-2 mb-4" />
+            <div class="flex gap-2">
+                <button id="saveContact" class="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-500">Save</button>
+                <button id="cancelContact" class="flex-1 bg-gray-200 py-2 rounded hover:bg-gray-300">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(form);
+        form.querySelector('#cancelContact').onclick = () => form.remove();
+        form.querySelector('#saveContact').onclick = async () => {
+            await api('/api/contacts', { method: 'POST', body: JSON.stringify({
+                name: document.getElementById('cName').value,
+                email: document.getElementById('cEmail').value,
+                phone: document.getElementById('cPhone').value,
+                company: document.getElementById('cCompany').value,
+                tags: document.getElementById('cTags').value,
+            })});
+            form.remove();
+            renderContacts(el);
+        };
+    }
+
+    window.deleteContact = async (id) => { if (confirm('Delete contact?')) { await api(`/api/contacts/${id}`, { method: 'DELETE' }); loadTab('contacts'); }};
+
+    // Projects
+    async function renderProjects(el) {
+        const projects = await api('/api/projects') || [];
+        const statusColors = { active: 'bg-green-100 text-green-800', completed: 'bg-blue-100 text-blue-800', on_hold: 'bg-yellow-100 text-yellow-800' };
+        el.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Projects</h2>
+                <button id="addProject" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-500">+ Add Project</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                ${projects.map(p => `<div class="bg-white rounded-xl shadow p-5">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold">${esc(p.title)}</h3>
+                        <span class="text-xs px-2 py-0.5 rounded ${statusColors[p.status] || ''}">${p.status}</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-3">${esc(p.description)}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-indigo-600">$${p.value.toLocaleString()}</span>
+                        <button onclick="deleteProject(${p.id})" class="text-red-500 text-xs hover:text-red-700">Delete</button>
+                    </div>
+                </div>`).join('')}
+            </div>
+            ${projects.length === 0 ? '<p class="text-center text-gray-400 mt-8">No projects yet</p>' : ''}`;
+        document.getElementById('addProject').onclick = () => showProjectForm(el);
+    }
+
+    function showProjectForm(el) {
+        const form = document.createElement('div');
+        form.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        form.innerHTML = `<div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold mb-4">New Project</h3>
+            <input id="pTitle" placeholder="Title *" class="w-full border rounded px-3 py-2 mb-2" />
+            <textarea id="pDesc" placeholder="Description" class="w-full border rounded px-3 py-2 mb-2" rows="2"></textarea>
+            <select id="pStatus" class="w-full border rounded px-3 py-2 mb-2">
+                <option value="active">Active</option><option value="on_hold">On Hold</option><option value="completed">Completed</option>
+            </select>
+            <input id="pValue" type="number" placeholder="Value ($)" class="w-full border rounded px-3 py-2 mb-4" />
+            <div class="flex gap-2">
+                <button id="saveProject" class="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-500">Save</button>
+                <button id="cancelProject" class="flex-1 bg-gray-200 py-2 rounded hover:bg-gray-300">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(form);
+        form.querySelector('#cancelProject').onclick = () => form.remove();
+        form.querySelector('#saveProject').onclick = async () => {
+            await api('/api/projects', { method: 'POST', body: JSON.stringify({
+                title: document.getElementById('pTitle').value,
+                description: document.getElementById('pDesc').value,
+                status: document.getElementById('pStatus').value,
+                value: parseFloat(document.getElementById('pValue').value) || 0,
+            })});
+            form.remove();
+            renderProjects(el);
+        };
+    }
+
+    window.deleteProject = async (id) => { if (confirm('Delete project?')) { await api(`/api/projects/${id}`, { method: 'DELETE' }); loadTab('projects'); }};
+
+    // Invoices
+    async function renderInvoices(el) {
+        const invoices = await api('/api/invoices') || [];
+        el.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Invoices</h2>
+                <button id="addInvoice" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-500">+ Add Invoice</button>
+            </div>
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50"><tr>
+                        <th class="text-left p-3">#</th><th class="text-left p-3">Project</th>
+                        <th class="text-left p-3">Amount</th><th class="text-left p-3">Status</th>
+                        <th class="text-left p-3">Due</th><th class="p-3">Actions</th>
+                    </tr></thead>
+                    <tbody>${invoices.map(inv => `<tr class="border-t">
+                        <td class="p-3">INV-${inv.id}</td>
+                        <td class="p-3">Project #${inv.project_id}</td>
+                        <td class="p-3 font-medium">$${inv.amount.toLocaleString()}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${inv.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${inv.status}</span></td>
+                        <td class="p-3">${inv.due_date || '-'}</td>
+                        <td class="p-3 text-center space-x-2">
+                            ${inv.status === 'unpaid' ? `<button onclick="markPaid(${inv.id})" class="text-green-600 text-xs hover:text-green-800">Mark Paid</button>` : ''}
+                            <button onclick="deleteInvoice(${inv.id})" class="text-red-500 text-xs hover:text-red-700">Delete</button>
+                        </td>
+                    </tr>`).join('')}</tbody>
+                </table>
+                ${invoices.length === 0 ? '<p class="p-6 text-center text-gray-400">No invoices yet</p>' : ''}
+            </div>`;
+        document.getElementById('addInvoice').onclick = () => showInvoiceForm(el);
+    }
+
+    function showInvoiceForm(el) {
+        const form = document.createElement('div');
+        form.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        form.innerHTML = `<div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold mb-4">New Invoice</h3>
+            <input id="iProjectId" type="number" placeholder="Project ID *" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="iAmount" type="number" step="0.01" placeholder="Amount ($) *" class="w-full border rounded px-3 py-2 mb-2" />
+            <input id="iDue" type="date" class="w-full border rounded px-3 py-2 mb-4" />
+            <div class="flex gap-2">
+                <button id="saveInvoice" class="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-500">Save</button>
+                <button id="cancelInvoice" class="flex-1 bg-gray-200 py-2 rounded hover:bg-gray-300">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(form);
+        form.querySelector('#cancelInvoice').onclick = () => form.remove();
+        form.querySelector('#saveInvoice').onclick = async () => {
+            await api('/api/invoices', { method: 'POST', body: JSON.stringify({
+                project_id: parseInt(document.getElementById('iProjectId').value),
+                amount: parseFloat(document.getElementById('iAmount').value),
+                due_date: document.getElementById('iDue').value,
+            })});
+            form.remove();
+            renderInvoices(el);
+        };
+    }
+
+    window.markPaid = async (id) => { await api(`/api/invoices/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'paid' }) }); loadTab('invoices'); };
+    window.deleteInvoice = async (id) => { if (confirm('Delete invoice?')) { await api(`/api/invoices/${id}`, { method: 'DELETE' }); loadTab('invoices'); }};
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    render();
+    </script>
+</body>
+</html>

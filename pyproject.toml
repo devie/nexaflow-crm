@@ -1,0 +1,24 @@
+[project]
+name = "nexaflow-crm"
+version = "0.1.0"
+description = "Lightweight CRM for freelancers — manage clients, projects, and invoices"
+readme = "README.md"
+authors = [
+    { name = "devie", email = "awaloeddin@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "fastapi>=0.134.0",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.22",
+    "sqlalchemy>=2.0.47",
+    "uvicorn>=0.41.0",
+]
+
+[project.scripts]
+nexaflow-crm = "nexaflow_crm.main:start"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
