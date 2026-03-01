@@ -91,17 +91,17 @@
           <div class="grid grid-cols-3 gap-3">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Project Value</label>
-              <input v-model.number="form.value" type="number" min="0" step="0.01" placeholder="0.00" class="w-full border rounded-lg px-3 py-2" />
+              <CurrencyInput v-model="form.value" placeholder="0" />
               <p class="text-xs text-gray-400 mt-0.5">Revenue</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Budget</label>
-              <input v-model.number="form.budget" type="number" min="0" step="0.01" placeholder="0.00" class="w-full border rounded-lg px-3 py-2" />
+              <CurrencyInput v-model="form.budget" placeholder="0" />
               <p class="text-xs text-gray-400 mt-0.5">Max spend</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Actual Cost</label>
-              <input v-model.number="form.actual_cost" type="number" min="0" step="0.01" placeholder="0.00" class="w-full border rounded-lg px-3 py-2" />
+              <CurrencyInput v-model="form.actual_cost" placeholder="0" />
               <p class="text-xs text-gray-400 mt-0.5">Spent so far</p>
             </div>
           </div>
@@ -338,6 +338,7 @@ import Badge from '../components/Badge.vue'
 import BudgetBar from '../components/BudgetBar.vue'
 import ContactPicker from '../components/ContactPicker.vue'
 import CommunicationTimeline from '../components/CommunicationTimeline.vue'
+import CurrencyInput from '../components/CurrencyInput.vue'
 import { useProjectsStore } from '../stores/projects'
 import { api } from '../api'
 

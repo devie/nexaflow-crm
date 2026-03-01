@@ -36,7 +36,7 @@
             <td class="p-3 font-mono text-xs">{{ inv.invoice_number || `INV-${inv.id}` }}</td>
             <td class="p-3">{{ inv.title || '-' }}</td>
             <td class="p-3">{{ projectName(inv.project_id) }}</td>
-            <td class="p-3 font-medium">{{ inv.currency || 'USD' }} {{ Number(inv.amount).toLocaleString() }}</td>
+            <td class="p-3 font-medium">{{ inv.currency || 'USD' }} {{ fmtNum(inv.amount) }}</td>
             <td class="p-3"><Badge :label="inv.status" :variant="inv.status" /></td>
             <td class="p-3">{{ inv.due_date || '-' }}</td>
             <td class="p-3">
@@ -100,15 +100,15 @@
         <div v-for="(item, i) in wizard.lineItems" :key="i" class="flex gap-2 mb-2 items-center">
           <input v-model="item.description" placeholder="Description" class="flex-1 border rounded px-2 py-1.5 text-sm" />
           <input v-model.number="item.quantity" type="number" min="1" class="w-16 border rounded px-2 py-1.5 text-sm text-center" />
-          <input v-model.number="item.unit_price" type="number" step="0.01" placeholder="Price" class="w-24 border rounded px-2 py-1.5 text-sm text-right" />
-          <span class="w-24 text-right text-sm py-1 font-medium text-gray-700">{{ wizard.currency }} {{ (item.quantity * item.unit_price).toFixed(2) }}</span>
+          <CurrencyInput v-model="item.unit_price" placeholder="Price" input-class="w-28 border rounded px-2 py-1.5 text-sm text-right" />
+          <span class="w-28 text-right text-sm py-1 font-medium text-gray-700">{{ wizard.currency }} {{ fmtNum(item.quantity * item.unit_price) }}</span>
           <button @click="wizard.lineItems.splice(i, 1)" class="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
         </div>
         <button @click="wizard.lineItems.push({ description: '', quantity: 1, unit_price: 0 })" class="text-indigo-600 text-sm hover:text-indigo-800 mb-4">
           + Add Line Item
         </button>
         <div class="text-right font-bold text-lg mb-4 border-t pt-3">
-          Total: {{ wizard.currency }} {{ wizardTotal.toFixed(2) }}
+          Total: {{ wizard.currency }} {{ fmtNum(wizardTotal) }}
         </div>
         <div class="flex gap-2">
           <button @click="wizardStep = 1" class="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Back</button>
@@ -125,7 +125,7 @@
           <p><span class="text-gray-500">Title:</span> <strong>{{ wizard.title || 'Untitled' }}</strong></p>
           <p><span class="text-gray-500">Due:</span> <strong>{{ wizard.due_date || 'None' }}</strong></p>
           <p><span class="text-gray-500">Items:</span> <strong>{{ wizard.lineItems.filter(i => i.description).length }}</strong></p>
-          <p class="text-xl font-bold mt-3 pt-2 border-t">{{ wizard.currency }} {{ wizardTotal.toFixed(2) }}</p>
+          <p class="text-xl font-bold mt-3 pt-2 border-t">{{ wizard.currency }} {{ fmtNum(wizardTotal) }}</p>
         </div>
 
         <div class="mb-4">
@@ -162,7 +162,7 @@
           <div class="grid grid-cols-2 gap-4">
             <div class="bg-indigo-50 rounded-lg p-4">
               <div class="text-xs text-gray-500">Amount</div>
-              <div class="text-2xl font-bold text-indigo-600">{{ detailInvoice.currency || 'USD' }} {{ Number(detailInvoice.amount).toLocaleString() }}</div>
+              <div class="text-2xl font-bold text-indigo-600">{{ detailInvoice.currency || 'USD' }} {{ fmtNum(detailInvoice.amount) }}</div>
             </div>
             <div class="bg-gray-50 rounded-lg p-4">
               <div class="text-xs text-gray-500">Due Date</div>
@@ -201,8 +201,8 @@
                   <tr v-for="item in lineItems" :key="item.id" class="border-t">
                     <td class="px-4 py-2">{{ item.description }}</td>
                     <td class="px-4 py-2 text-center">{{ item.quantity }}</td>
-                    <td class="px-4 py-2 text-right">{{ item.unit_price.toFixed(2) }}</td>
-                    <td class="px-4 py-2 text-right font-medium">{{ item.total.toFixed(2) }}</td>
+                    <td class="px-4 py-2 text-right">{{ fmtNum(item.unit_price) }}</td>
+                    <td class="px-4 py-2 text-right font-medium">{{ fmtNum(item.total) }}</td>
                     <td class="px-2 py-2">
                       <button @click="removeLineItem(item.id)" class="text-red-400 hover:text-red-600 text-xs">&times;</button>
                     </td>
@@ -268,6 +268,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import Modal from '../components/Modal.vue'
 import Badge from '../components/Badge.vue'
+import CurrencyInput from '../components/CurrencyInput.vue'
 import { useInvoicesStore } from '../stores/invoices'
 import { api, getToken } from '../api'
 
@@ -315,6 +316,11 @@ function loadInvoices() {
 function projectName(projectId) {
   const p = projects.value.find(pr => pr.id === projectId)
   return p ? p.title : `Project #${projectId}`
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '0'
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function openWizard() {

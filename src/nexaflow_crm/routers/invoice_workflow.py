@@ -52,16 +52,21 @@ def _ensure_invoice_number(invoice: Invoice, db: Session, user: User) -> str:
     return invoice.invoice_number
 
 
+def _fmt_number(n: float) -> str:
+    """Format number with thousand separators."""
+    return f"{n:,.2f}"
+
+
 def _generate_invoice_html(invoice: Invoice, user: User, base_url: str = "", for_pdf: bool = False) -> str:
     line_items_html = ""
     subtotal = 0.0
     for item in invoice.line_items:
         line_items_html += f"""
         <tr>
-            <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb">{item.description}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:center">{item.quantity:g}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right">{invoice.currency} {item.unit_price:,.2f}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right">{invoice.currency} {item.total:,.2f}</td>
+            <td style="padding:8px;border-bottom:1px solid #dddddd;">{item.description}</td>
+            <td style="padding:8px;border-bottom:1px solid #dddddd;text-align:center;">{item.quantity:g}</td>
+            <td style="padding:8px;border-bottom:1px solid #dddddd;text-align:right;">{_fmt_number(item.unit_price)}</td>
+            <td style="padding:8px;border-bottom:1px solid #dddddd;text-align:right;">{_fmt_number(item.total)}</td>
         </tr>"""
         subtotal += item.total
 
@@ -73,70 +78,173 @@ def _generate_invoice_html(invoice: Invoice, user: User, base_url: str = "", for
     if not for_pdf and invoice.tracking_token and base_url:
         tracking = f'<img src="{base_url}/api/track/open/{invoice.tracking_token}" width="1" height="1" alt="" />'
 
-    # PDF-friendly styles (no external CSS)
+    title_row = f'<tr><td style="padding:2px 0;color:#666666;">Title:</td><td style="padding:2px 0;padding-left:8px;"><b>{invoice.title}</b></td></tr>' if invoice.title else ''
+    due_row = f'<tr><td style="padding:2px 0;color:#666666;">Due Date:</td><td style="padding:2px 0;padding-left:8px;"><b>{invoice.due_date}</b></td></tr>' if invoice.due_date else ''
+    notes_html = f'<table style="width:100%;margin-bottom:20px;"><tr><td style="background-color:#f5f5f5;padding:10px;font-size:11px;color:#666666;">{invoice.notes}</td></tr></table>' if invoice.notes else ''
+
+    # xhtml2pdf-compatible HTML (no border-radius, no shorthand, explicit closing tags)
     return f"""<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"/><title>Invoice {inv_num}</title></head>
-<body style="font-family:Helvetica,Arial,sans-serif;color:#1f2937;margin:0;padding:0">
-<div style="max-width:700px;margin:0 auto;padding:40px 30px">
+<head>
+    <meta charset="utf-8"/>
+    <title>Invoice {inv_num}</title>
+    <style type="text/css">
+        body {{
+            font-family: Helvetica, Arial, sans-serif;
+            color: #333333;
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+        }}
+        .container {{
+            padding: 30px;
+        }}
+        .header-table {{
+            width: 100%;
+            margin-bottom: 25px;
+        }}
+        .invoice-title {{
+            font-size: 26px;
+            font-weight: bold;
+            color: #4f46e5;
+        }}
+        .invoice-number {{
+            font-size: 13px;
+            color: #888888;
+            margin-top: 4px;
+        }}
+        .from-name {{
+            font-size: 13px;
+            font-weight: bold;
+        }}
+        .from-email {{
+            font-size: 11px;
+            color: #888888;
+        }}
+        .meta-table {{
+            width: 100%;
+            margin-bottom: 20px;
+        }}
+        .amount-label {{
+            font-size: 10px;
+            color: #888888;
+            text-align: right;
+        }}
+        .amount-value {{
+            font-size: 22px;
+            font-weight: bold;
+            color: #4f46e5;
+            text-align: right;
+        }}
+        .items-table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+        .items-table th {{
+            background-color: #f0f0f0;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 11px;
+            border-bottom: 2px solid #cccccc;
+        }}
+        .items-table th.right {{
+            text-align: right;
+        }}
+        .items-table th.center {{
+            text-align: center;
+        }}
+        .totals-table {{
+            width: 250px;
+            margin-left: auto;
+            margin-top: 15px;
+        }}
+        .totals-table td {{
+            padding: 4px 8px;
+            font-size: 12px;
+        }}
+        .totals-table .label {{
+            color: #888888;
+        }}
+        .totals-table .total-row td {{
+            padding-top: 10px;
+            font-size: 15px;
+            font-weight: bold;
+            border-top: 2px solid #333333;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #dddddd;
+            text-align: center;
+            font-size: 10px;
+            color: #aaaaaa;
+        }}
+    </style>
+</head>
+<body>
+<div class="container">
     <!-- Header -->
-    <table style="width:100%;margin-bottom:30px"><tr>
-        <td style="vertical-align:top">
-            <div style="font-size:28px;font-weight:bold;color:#4f46e5">INVOICE</div>
-            <div style="font-size:14px;color:#6b7280;margin-top:4px">{inv_num}</div>
-        </td>
-        <td style="text-align:right;vertical-align:top">
-            <div style="font-size:14px;font-weight:bold">{user.name}</div>
-            <div style="font-size:13px;color:#6b7280">{user.email}</div>
-        </td>
-    </tr></table>
-
-    <!-- Meta -->
-    <table style="width:100%;margin-bottom:24px;font-size:13px">
-    <tr>
-        <td style="width:50%;vertical-align:top">
-            {f'<div style="margin-bottom:4px"><span style="color:#6b7280">Title:</span> <strong>{invoice.title}</strong></div>' if invoice.title else ''}
-            <div style="margin-bottom:4px"><span style="color:#6b7280">Date:</span> {created}</div>
-            {f'<div style="margin-bottom:4px"><span style="color:#6b7280">Due:</span> {invoice.due_date}</div>' if invoice.due_date else ''}
-        </td>
-        <td style="width:50%;vertical-align:top;text-align:right">
-            <div style="font-size:11px;color:#6b7280">AMOUNT DUE</div>
-            <div style="font-size:24px;font-weight:bold;color:#4f46e5">{invoice.currency} {total:,.2f}</div>
-        </td>
-    </tr>
+    <table class="header-table">
+        <tr>
+            <td style="vertical-align:top;width:60%;">
+                <div class="invoice-title">INVOICE</div>
+                <div class="invoice-number">{inv_num}</div>
+            </td>
+            <td style="vertical-align:top;text-align:right;width:40%;">
+                <div class="from-name">{user.name}</div>
+                <div class="from-email">{user.email}</div>
+            </td>
+        </tr>
     </table>
 
-    {f'<div style="background:#f9fafb;border-radius:6px;padding:12px;margin-bottom:24px;font-size:13px;color:#6b7280">{invoice.notes}</div>' if invoice.notes else ''}
+    <!-- Meta Info -->
+    <table class="meta-table">
+        <tr>
+            <td style="vertical-align:top;width:50%;">
+                <table>
+                    {title_row}
+                    <tr><td style="padding:2px 0;color:#666666;">Date:</td><td style="padding:2px 0;padding-left:8px;">{created}</td></tr>
+                    {due_row}
+                    <tr><td style="padding:2px 0;color:#666666;">Currency:</td><td style="padding:2px 0;padding-left:8px;">{invoice.currency}</td></tr>
+                </table>
+            </td>
+            <td style="vertical-align:top;width:50%;">
+                <div class="amount-label">AMOUNT DUE</div>
+                <div class="amount-value">{invoice.currency} {_fmt_number(total)}</div>
+            </td>
+        </tr>
+    </table>
+
+    {notes_html}
 
     <!-- Line Items -->
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table class="items-table">
         <thead>
-            <tr style="background:#f3f4f6">
-                <th style="padding:10px 8px;text-align:left;font-weight:600">Description</th>
-                <th style="padding:10px 8px;text-align:center;font-weight:600;width:60px">Qty</th>
-                <th style="padding:10px 8px;text-align:right;font-weight:600;width:120px">Unit Price</th>
-                <th style="padding:10px 8px;text-align:right;font-weight:600;width:120px">Total</th>
+            <tr>
+                <th>Description</th>
+                <th class="center" style="width:50px;">Qty</th>
+                <th class="right" style="width:100px;">Unit Price</th>
+                <th class="right" style="width:100px;">Total</th>
             </tr>
         </thead>
         <tbody>{line_items_html}</tbody>
     </table>
 
-    <!-- Total -->
-    <table style="width:100%;margin-top:16px"><tr>
-        <td></td>
-        <td style="width:250px;text-align:right">
-            <table style="width:100%;font-size:13px">
-                <tr><td style="padding:4px 8px;color:#6b7280">Subtotal</td><td style="padding:4px 8px;text-align:right">{invoice.currency} {subtotal:,.2f}</td></tr>
-                <tr style="font-size:16px;font-weight:bold;border-top:2px solid #1f2937">
-                    <td style="padding:10px 8px">Total</td>
-                    <td style="padding:10px 8px;text-align:right">{invoice.currency} {total:,.2f}</td>
-                </tr>
-            </table>
-        </td>
-    </tr></table>
+    <!-- Totals -->
+    <table class="totals-table">
+        <tr>
+            <td class="label">Subtotal</td>
+            <td style="text-align:right;">{invoice.currency} {_fmt_number(subtotal)}</td>
+        </tr>
+        <tr class="total-row">
+            <td>Total</td>
+            <td style="text-align:right;">{invoice.currency} {_fmt_number(total)}</td>
+        </tr>
+    </table>
 
     <!-- Footer -->
-    <div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
+    <div class="footer">
         Generated by NexaFlow CRM
     </div>
     {tracking}
