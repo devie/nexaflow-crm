@@ -28,7 +28,7 @@
               :key="m.month"
               class="flex-1 flex flex-col items-center justify-end"
             >
-              <span class="text-xs font-medium mb-1">{{ fmtShort(m.revenue) }}</span>
+              <span class="text-xs font-medium mb-1">{{ fmtShort(convertAmount(m.revenue)) }}</span>
               <div
                 class="w-full bg-indigo-500 rounded-t transition-all"
                 :style="{ height: barHeight(m.revenue) + '%' }"
@@ -59,24 +59,39 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StatCard from '../components/StatCard.vue'
 import { useDashboardStore } from '../stores/dashboard'
 import { useAuthStore } from '../stores/auth'
-import { formatCurrency } from '../utils/currency'
+import { fetchRates, convert, formatCurrency } from '../utils/currency'
 
 const dashboard = useDashboardStore()
 const auth = useAuthStore()
 
+const rates = ref({})
 const currency = computed(() => auth.user?.preferred_currency || 'USD')
 
-onMounted(() => dashboard.fetchStats())
+onMounted(async () => {
+  await dashboard.fetchStats()
+  await loadRates()
+})
 
-// Re-fetch dashboard when currency changes (so server-side amounts stay consistent)
-watch(currency, () => dashboard.fetchStats())
+watch(currency, async () => {
+  await loadRates()
+})
+
+async function loadRates() {
+  // Fetch rates from USD to all currencies
+  rates.value = await fetchRates('USD')
+}
+
+function convertAmount(amount) {
+  if (!amount) return 0
+  return convert(amount, 'USD', currency.value, rates.value)
+}
 
 function fmt(amount) {
-  return formatCurrency(amount, currency.value)
+  return formatCurrency(convertAmount(amount), currency.value)
 }
 
 function fmtShort(amount) {
