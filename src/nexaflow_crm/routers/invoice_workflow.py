@@ -186,7 +186,7 @@ def download_pdf(
 def send_invoice(
     invoice_id: int,
     to_email: str = Query(...),
-    mode: str = Query("email_only", regex="^(email_only|pdf_only|email_and_pdf)$"),
+    mode: str = Query("email_only", pattern="^(email_only|pdf_only|email_and_pdf)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
