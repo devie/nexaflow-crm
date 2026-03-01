@@ -39,6 +39,19 @@ def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), user: Use
     return invoice
 
 
+@router.get("/{invoice_id}", response_model=InvoiceOut)
+def get_invoice(invoice_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    invoice = (
+        db.query(Invoice)
+        .join(Project)
+        .filter(Invoice.id == invoice_id, Project.user_id == user.id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
 @router.put("/{invoice_id}", response_model=InvoiceOut)
 def update_invoice(invoice_id: int, data: InvoiceUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     invoice = (
